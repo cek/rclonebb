@@ -1,0 +1,3 @@
+iocage/**
+.DS_Store/**
+.*.swp
