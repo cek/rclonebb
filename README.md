@@ -1,4 +1,4 @@
-# rclonebb
+# rclonebb.py
 
 Backup to Backblaze B2 using ``rclone``.
 
@@ -12,7 +12,7 @@ This script was inspired by [rclonebackup](https://github.com/jaburt/rclonebacku
 
 * Create a B2 bucket to sync to.
 * Set up rclone to work with Backblaze B2. Instructions can be found [here](https://rclone.org/b2). Note that if running on a Truenas system, you will want to store the resulting conf file someplace other than the default location.  A prototype `rclone.conf` file is included in this repo.
-* You should probably encrypt your backups; details can be found [here](https://rclone.org/crypt).
+* You should encrypt your backups; details can be found [here](https://rclone.org/crypt).
 * Optionally, create an rclone exclusion file, following the instructions [here](https://rclone.org/filtering).  An example exclusion file is included in this repo as well.
 * Although `rclonebb` configuration-related options may be specified on the command line, it's usually easier to edit the script
 and change the defaults. See the comments inline for details.

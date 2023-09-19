@@ -1,3 +1,4 @@
 iocage/**
+ix-applications/**
 .DS_Store/**
 .*.swp
