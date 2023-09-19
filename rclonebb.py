@@ -188,10 +188,20 @@ def main():
                f"Command line: {cmd}\n\n")
 
     # Open the json file and parse the last info entry
-    j = []
+    error_messages = []
     last_info = []
     with open(log_file, 'r') as f:
         lines = f.readlines()
+        for line in lines:
+            try:
+                j = json.loads(line)
+            except Exception as e:
+                summary += f"Error parsing json: {e}\n"
+            if j['level'] == 'error':
+                if "object" in j:
+                    error_messages += f"{j['object']}: \"{j['message']}\"\n"
+                else:
+                    error_messages += f"{j['message']}\n"
         try:
             last_info = json.loads(lines[-1])
         except Exception as e:
@@ -254,6 +264,8 @@ def main():
 
     if args.email_recipient:
         summary += exception_string 
+        if error_messages:
+            summary += f"\nErrors:\n{error_messages}\n"
         email_subject = f"rclonebb {args.mode} summary - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         send_email(email_subject, summary, email_recipient, smtp_server, smtp_port, smtp_username, smtp_password, log_file if attach_log else None)
 
