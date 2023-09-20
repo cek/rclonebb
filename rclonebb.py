@@ -199,9 +199,9 @@ def main():
                 summary += f"Error parsing json: {e}\n"
             if j['level'] == 'error':
                 if "object" in j:
-                    error_messages += f"{j['object']}: \"{j['message']}\"\n"
+                    error_messages += f"{j['object']}: \"{j['msg']}\"\n"
                 else:
-                    error_messages += f"{j['message']}\n"
+                    error_messages += f"{j['msg']}\n"
         try:
             last_info = json.loads(lines[-1])
         except Exception as e:
