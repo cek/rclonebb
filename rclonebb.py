@@ -5,6 +5,7 @@
 # https://github.com/cek/rclonebb
 #
 import os
+import subprocess
 import argparse
 import smtplib, ssl
 import pathlib
@@ -38,6 +39,8 @@ DEFAULT_COMPRESS_LOG = True
 DEFAULT_RECIPIENT = "me@domain.com"
 # Attach log file to email?
 DEFAULT_ATTACH_LOG = False
+# Remote cleanup path, if any
+DEFAULT_CLEANUP_PATH = "secret:/time-machine/"
 
 # Email sender configuration
 DEFAULT_SMTP_SERVER = 'smtp.domain.com'
@@ -45,7 +48,7 @@ DEFAULT_SMTP_PORT = 587
 DEFAULT_SMTP_USERNAME = 'me@domain.com'
 DEFAULT_SMTP_PASSWORD = 'password'
 
-def rclone_backup(mode, local_dir, remote_bucket, transfers, exclude_file, rclone_config, min_age, log_dir, start_time, dry_run):
+def rclone_backup(mode, local_dir, remote_bucket, transfers, exclude_file, rclone_config, min_age, log_dir, start_time, dry_run, cleanup_path):
     # Ensure that the log directory exists
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -53,24 +56,58 @@ def rclone_backup(mode, local_dir, remote_bucket, transfers, exclude_file, rclon
     formatted_start_time = start_time.strftime('%Y%m%d_%H%M%S')
     log_file = os.path.join(log_dir, f"rclone_log_{formatted_start_time}.json")
 
-    cmd = (f"rclone {mode} "
-           f"--stats-file-name-length 0 "
-           f"--use-json-log "
-           f"--transfers {transfers} --log-level INFO --log-file {log_file} "
-           f"--fast-list --links --b2-hard-delete --min-age {min_age}" )
+    cmd = []
+    cmd.append(f'rclone')
+    cmd.append(f'{mode}')
+    cmd.append(f'--stats-file-name-length=0')
+    cmd.append(f'--use-json-log')
+    cmd.append(f'--transfers={transfers}')
+    cmd.append(f'--log-level=INFO')
+    cmd.append(f'--log-file={log_file}')
+    cmd.append(f'--fast-list')
+    cmd.append(f'--links')
+    cmd.append(f'--b2-hard-delete')
+    cmd.append(f'--min-age={min_age}')
 
     if dry_run:
-        cmd += f" --dry-run"
+        cmd.append('--dry-run')
     if rclone_config:
-        cmd += f" --config={rclone_config}"
+        cmd.append(f'--config={rclone_config}')
     if exclude_file:
-        cmd += f" --exclude-from={exclude_file}"
+        cmd.append(f'--exclude-from={exclude_file}')
 
-    cmd += f" {local_dir} {remote_bucket}"
-  
-    os.system(cmd)
-    
-    return cmd, log_file
+    cmd.append(f'{local_dir}')
+    cmd.append(f'{remote_bucket}')
+ 
+    print(f'Running: {cmd}')
+    output = subprocess.run(cmd, capture_output=True)
+
+    exit_code = output.returncode
+    if not cleanup_path or exit_code != 0:
+        if exit_code != 0:
+            print(f'rlcone {mode} exited with code: {exit_code}: {output.stdout.decode("utf-8")}')
+        return exit_code, cmd, "", log_file
+
+    # Perform cleanup operation on the specified path
+    cleanup_cmd = []
+    cleanup_cmd.append(f'rclone')
+    cleanup_cmd.append(f'cleanup')
+    cleanup_cmd.append(f'--stats-file-name-length=0')
+    cleanup_cmd.append(f'--use-json-log')
+    cleanup_cmd.append(f'--log-level=INFO')
+    cleanup_cmd.append(f'--log-file={log_file}')
+    cleanup_cmd.append(f'{cleanup_path}')
+    if dry_run:
+        cleanup_cmd.append(f'--dry-run')
+    if rclone_config:
+        cleanup_cmd.append(f'--config={rclone_config}')
+
+    print(f'Running cleanup: {cleanup_cmd}')
+    clean_output = subprocess.run(cleanup_cmd, capture_output=True)
+    clean_exit_code = clean_output.returncode
+    if clean_exit_code != 0:
+        print(f'rlcone cleanup exited with code: {clean_exit_code}: {clean_output.stdout.decode("utf-8")}')
+    return clean_exit_code, cmd, cleanup_cmd, log_file
 
 def maintain_log_files(log_dir, max_log_files):
     log_files = sorted([os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.startswith("rclone_log_")], key=os.path.getctime)
@@ -125,6 +162,7 @@ def main():
     rclone_config = config.get('DEFAULT', 'rclone_config', fallback=DEFAULT_RCLONE_CONFIG)
     exclude_file = config.get('DEFAULT', 'exclude_file', fallback=DEFAULT_EXCLUDE_FILE)
     min_age = config.get('DEFAULT', 'min_age', fallback=DEFAULT_MIN_AGE)
+    cleanup_path = config.get('DEFAULT', 'cleanup_path', fallback=DEFAULT_CLEANUP_PATH)
     log_dir = config.get('DEFAULT', 'log_dir', fallback=DEFAULT_LOG_DIR)
     max_log_files = config.getint('DEFAULT', 'max_log_files', fallback=DEFAULT_MAX_LOG_FILES)
     compress_log = config.getboolean('DEFAULT', 'compress_log', fallback=DEFAULT_COMPRESS_LOG)
@@ -163,6 +201,8 @@ def main():
                         help=f"Attach the log file to the email. Default: {attach_log}")
     parser.add_argument("--dry-run", action="store_true",
                         help="Perform a dry run. No changes will be made. Only effective in 'sync' mode.")
+    parser.add_argument("--cleanup_path", type=str, default=cleanup_path,
+                        help="Clean up the specified path following a successful sync or copy. Default: {cleanup_path}")
 
    
     args = parser.parse_args()
@@ -171,9 +211,9 @@ def main():
     start_time = datetime.now()
 
     try:
-        cmd, log_file = rclone_backup(args.mode, args.local_dir, args.remote_bucket, args.transfers, args.exclude_from, args.rclone_config, args.min_age, args.log_dir, start_time, args.dry_run)
+        exit_code, cmd, cleanup_cmd, log_file = rclone_backup(args.mode, args.local_dir, args.remote_bucket, args.transfers, args.exclude_from, args.rclone_config, args.min_age, args.log_dir, start_time, args.dry_run, args.cleanup_path)
     except Exception as e:
-        exception_string += e + '\n'
+        exception_string += str(e) + '\n'
 
     end_time = datetime.now()
     elapsed_time = end_time - start_time
@@ -185,10 +225,13 @@ def main():
     summary = (f"Start time: {formatted_start_time}\n"
                f"Completion time: {formatted_end_time}\n"
                f"Elapsed time: {formatted_elapsed_time}\n\n"
-               f"Command line: {cmd}\n\n")
+               f"Command line: {' '.join(cmd)}\n\n")
+    if cleanup_cmd:
+        summary += f"Cleanup command line: {' '.join(cleanup_cmd)}\n\n"
+
+    error_messages = ""
 
     # Open the json file and parse the last info entry
-    error_messages = []
     last_info = []
     with open(log_file, 'r') as f:
         lines = f.readlines()
@@ -254,13 +297,13 @@ def main():
                 pathlib.Path(log_file).unlink()
                 log_file = compressed_log_file
         except Exception as e:
-            exception_string += e + '\n'
+            exception_string += str(e) + '\n'
 
     if args.max_log_files > 0:
         try:
             maintain_log_files(args.log_dir, args.max_log_files)
         except Exception as e:
-            exception_string += e + '\n'
+            exception_string += str(e) + '\n'
 
     if args.email_recipient:
         summary += exception_string 
