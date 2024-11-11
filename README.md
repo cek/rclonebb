@@ -18,6 +18,7 @@ This script was inspired by [rclonebackup](https://github.com/jaburt/rclonebacku
 and change the defaults. See the comments inline for details.
 * Check that your configuration is correct by performing a dry run (``rclonebb.py sync --dry-run``)
 * If running on a Truenas system, use the Trunas web interface to create a new Cron Job task that performs a sync at the desired intervals. Use ``Run Now`` to perform an initial sync.
+* Determine if you want to run ``rsync cleanup`` after a successful sync. If so, set ``cleanup`` path appropriately.
 
 # Use
 
@@ -26,6 +27,7 @@ and change the defaults. See the comments inline for details.
 ``rclonebb.py check [options]``: Check that the files in the local directory and remote bucket match.
 
 ``rclonebb.py cryptcheck [options]``: Check that the files in the local directory and encrypted remote bucket match.
+
 
 # Options
 
@@ -47,7 +49,14 @@ and change the defaults. See the comments inline for details.
   --max-log-files MAX_LOG_FILES
                         Maximum number of log files to store. Oldest files will be deleted first.
   --dry-run             Perform a dry run. No changes will be made. Only effective in 'sync' mode.
+  --cleanup_path        Path on which to perform ``rclone cleanup'' following a successful sync, if any.
 ```
+
+# Duplicate files
+
+Note that if a file is modified and synced to backblaze, backblaze will by deafult keep both old version and the new version. This behavior can be changed using the ``lifetime`` bucket settings to, for example, only store a single copy of a file. However, even with this setting, backblaze can store multiple copies of a file, as the earlier versions are first 'hidden' by backblaze's lifetime management implementation, before the files are eventually deleted.
+
+To force immediate deletion of old file versions, specify a ``cleanup_path`` (e.g. ``/`` or ``/time-machine``), and rclonebb will run ``rclone cleanup`` with the appropriate arguments after a successful sync.
 
 # References
 * https://rclone.org
