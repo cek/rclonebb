@@ -233,6 +233,7 @@ def main():
 
     # Open the json file and parse the last info entry
     last_info = []
+    stats_info = []
     with open(log_file, 'r') as f:
         lines = f.readlines()
         for line in lines:
@@ -245,6 +246,8 @@ def main():
                     error_messages += f"{j['object']}: \"{j['msg']}\"\n"
                 else:
                     error_messages += f"{j['msg']}\n"
+            if "stats" in j:
+                stats_info = j
         try:
             last_info = json.loads(lines[-1])
         except Exception as e:
@@ -266,20 +269,20 @@ def main():
         summary += f"Retry: {last_info['retry']}\n"
     if "warn" in last_info:
         summary += f"Warning: {last_info['warn']}\n"
-    if "stats" in last_info:
+    if "stats" in stats_info:
         # Compute throughput from bytes and elapsed time
-        bytes_transfered = int(last_info["stats"]["bytes"])
-        elapsed_time = float(last_info["stats"]["elapsedTime"])
+        bytes_transfered = int(stats_info["stats"]["bytes"])
+        elapsed_time = float(stats_info["stats"]["elapsedTime"])
         throughput = bytes_transfered / elapsed_time
         throughput, throughputUnit = format_bytes(throughput)
         bytes_transfered, bytes_transferedUnit = format_bytes(bytes_transfered)
 
-        deleted_files = last_info["stats"]["deletes"]
-        deleted_dirs = last_info["stats"]["deletedDirs"]
-        transferred_files = last_info["stats"]["transfers"]
-        transfer_time = last_info["stats"]["transferTime"]
-        checks = last_info["stats"]["checks"]
-        speed = last_info["stats"]["speed"]
+        deleted_files = stats_info["stats"]["deletes"]
+        deleted_dirs = stats_info["stats"]["deletedDirs"]
+        transferred_files = stats_info["stats"]["transfers"]
+        transfer_time = stats_info["stats"]["transferTime"]
+        checks = stats_info["stats"]["checks"]
+        speed = stats_info["stats"]["speed"]
         summary += f"Checks: {checks}\n"
         summary += f"Transferred files: {transferred_files}\n"
         summary += f"Deleted files: {deleted_files}\n"
